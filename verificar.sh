@@ -8,6 +8,9 @@ API=https://api.clinicarochaperyassu.com.br
 PAINEL=https://painel.clinicarochaperyassu.com.br
 S3=https://s3.clinicarochaperyassu.com.br
 
+# Teste do próprio alarme: SIMULAR_QUEDA=1 aponta o painel para um endereço inexistente.
+if [ "${SIMULAR_QUEDA:-}" = "1" ]; then PAINEL=https://simulacao-de-queda.clinicarochaperyassu.com.br; fi
+
 : > falhas.txt
 
 # Uma checagem só conta como falha se falhar duas vezes seguidas (20s entre elas),

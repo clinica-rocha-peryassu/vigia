@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      simular_queda:
+        description: 'Testar o alarme (finge que o painel caiu)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -22,6 +27,8 @@ jobs:
 
       - name: Verificar se o sistema está no ar
         id: check
+        env:
+          SIMULAR_QUEDA: ${{ inputs.simular_queda && '1' || '' }}
         run: |
           set +e
           bash verificar.sh
@@ -33,6 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FALHOU: ${{ steps.check.outputs.falhou }}
+          TESTE: ${{ inputs.simular_queda && ' — TESTE do alarme, ignore' || '' }}
         run: |
           aberta=$(gh issue list --state open --label queda --json number --jq '.[0].number // empty')
           agora=$(TZ=America/Sao_Paulo date '+%d/%m %H:%M')
@@ -48,7 +56,7 @@ jobs:
                 echo
                 echo "Roteiro: memória \`reference-vps-fora-do-ar-runbook\` (entrar pelo Web console da Hostinger)."
               } > corpo.md
-              gh issue create --title "🚨 Sistema da clínica fora do ar ($agora)" --label queda --body-file corpo.md
+              gh issue create --title "🚨 Sistema da clínica fora do ar ($agora)$TESTE" --label queda --body-file corpo.md
             else
               ultimo=$(gh issue view "$aberta" --json updatedAt --jq .updatedAt)
               if [ $(( $(date +%s) - $(date -d "$ultimo" +%s) )) -ge 3600 ]; then
