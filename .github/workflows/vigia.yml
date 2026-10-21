@@ -1,0 +1,77 @@
+name: Vigia da clínica
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: vigia
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar se o sistema está no ar
+        id: check
+        run: |
+          set +e
+          bash verificar.sh
+          echo "falhou=$?" >> "$GITHUB_OUTPUT"
+
+      # Uma issue por queda: abre quando cai (menciona o Dr → e-mail), comenta a cada
+      # hora enquanto continua fora, e fecha quando volta (outro e-mail: "voltou").
+      - name: Abrir, lembrar ou fechar o aviso
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FALHOU: ${{ steps.check.outputs.falhou }}
+        run: |
+          aberta=$(gh issue list --state open --label queda --json number --jq '.[0].number // empty')
+          agora=$(TZ=America/Sao_Paulo date '+%d/%m %H:%M')
+          if [ "$FALHOU" != "0" ]; then
+            if [ -z "$aberta" ]; then
+              gh label create queda --color B60205 2>/dev/null || true
+              {
+                echo "@rperyassu-cpu o sistema da clínica parece FORA DO AR desde $agora (horário de Brasília)."
+                echo
+                echo "Enquanto estiver fora, **a Sofia não recebe as mensagens dos pacientes** e o painel não abre."
+                echo
+                cat falhas.txt
+                echo
+                echo "Roteiro: memória \`reference-vps-fora-do-ar-runbook\` (entrar pelo Web console da Hostinger)."
+              } > corpo.md
+              gh issue create --title "🚨 Sistema da clínica fora do ar ($agora)" --label queda --body-file corpo.md
+            else
+              ultimo=$(gh issue view "$aberta" --json updatedAt --jq .updatedAt)
+              if [ $(( $(date +%s) - $(date -d "$ultimo" +%s) )) -ge 3600 ]; then
+                { echo "@rperyassu-cpu continua fora às $agora."; echo; cat falhas.txt; } > corpo.md
+                gh issue comment "$aberta" --body-file corpo.md
+              fi
+            fi
+          elif [ -n "$aberta" ]; then
+            gh issue close "$aberta" --comment "✅ @rperyassu-cpu voltou ao ar às $agora."
+          fi
+
+      # O GitHub desliga agendamentos de repositório público parado há 60 dias.
+      # Um sinal de vida a cada ~30 dias evita isso.
+      - name: Sinal de vida
+        run: |
+          ultimo=$(git log -1 --format=%ct)
+          if [ $(( $(date +%s) - ultimo )) -ge 2592000 ]; then
+            date -u +%FT%TZ > ultimo-sinal.txt
+            git config user.name "vigia"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add ultimo-sinal.txt && git commit -m "sinal de vida" && git push
+          fi
+
+      - name: Falhar o job se caiu (o GitHub manda e-mail de falha)
+        if: steps.check.outputs.falhou != '0'
+        run: exit 1
