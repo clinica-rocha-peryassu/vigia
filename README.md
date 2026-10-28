@@ -8,3 +8,6 @@ hora e fecha sozinha quando volta. O job também falha, o que gera o e-mail de f
 
 Existe porque, em 17–19/10/2026, o servidor reiniciou e ficou 2,5 dias fora sem nenhum aviso —
 o alarme antigo rodava dentro do próprio servidor que caiu.
+
+Cada execução do GitHub fica ~5h40 viva checando a cada 5 min (`rodada.sh`): o agendamento `*/5`
+do GitHub, na prática, só disparava 5 a 8 vezes por dia (visto em 22–27/10/2026).
